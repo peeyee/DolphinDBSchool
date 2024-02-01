@@ -1,0 +1,29 @@
+defg dayReturnSkew(close){
+	return skew(ratios(close))	
+}
+
+def writeDayReturnSkew(dBegin,dEnd){
+	dReturn = select   
+        `dayReturnSkew as factorname
+        ,dayReturnSkew(close) as val 
+    from loadTable("dfs://k_minute_level", "k_minute") 
+    where date(tradetime) between dBegin and dEnd 
+    group by date(tradetime) as tradetime, securityid
+	loadTable("dfs://minuteFactorDB","factor_k").append!(dReturn)
+}
+
+for (i in 0..11){
+	dBegin = monthBegin(temporalAdd(2020.01.01,i,"M"))
+	dEnd = monthEnd(temporalAdd(2020.01.01,i,"M"))
+	submitJob("writeDayReturnSkew","writeDayReturnSkew_"+dBegin+"_"+dEnd, writeDayReturnSkew,dBegin,dEnd)
+}
+
+
+scheduleJob(jobId=`dayReturnSkew
+,jobDesc="dayReturnSkew"+datetimeFormat(now(),"yyyyMMdd")
+,jobFunc=writeDayReturnSkew{today(), today()},scheduleTime=17:23m
+,startDate=date(now()) ,endDate=2099.12.31, frequency='D')
+
+getScheduledJobs()
+
+

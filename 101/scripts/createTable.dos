@@ -1,0 +1,118 @@
+/*
+for more detail
+see: https://github.com/dolphindb/Tutorials_CN/blob/master/best_practices_for_partitioned_storage.md
+
+*/
+
+//1. level2 entrust
+create database "dfs://split_SZ_TB"
+partitioned by VALUE(2020.01.01..2021.01.01), HASH([SYMBOL, 25])
+engine='TSDB'
+create table "dfs://split_SZ_TB"."split_SZ_entrustTB"(
+  ChannelNo INT
+  ApplSeqNum LONG
+  MDStreamID SYMBOL
+  SecurityID SYMBOL
+  SecurityIDSource SYMBOL
+  Price DOUBLE
+  OrderQty LONG
+  Side SYMBOL
+  TradeDate DATE[comment="交易日期", compress="delta"]  
+  TradeTime TIME[comment="交易时间", compress="delta"]
+  OrderType SYMBOL
+  LocalTime TIME
+  SeqNo INT
+)
+partitioned by TradeDate, SecurityID,
+sortColumns=[`SecurityID,`TradeTime],
+keepDuplicates=ALL
+
+create database "dfs://split_SH_TB"
+partitioned by VALUE(2020.01.01..2021.01.01), HASH([SYMBOL, 25])
+engine='TSDB'
+
+
+
+//2 日K线
+create database "dfs://k_day_level"
+partitioned by RANGE(2000.01M + (0..30)*12)
+engine='OLAP'
+
+create table "dfs://k_day_level"."k_day"(
+	securityid SYMBOL  
+	tradetime TIMESTAMP
+	open DOUBLE        
+	close DOUBLE       
+	high DOUBLE        
+	low DOUBLE
+	vol INT
+	val DOUBLE
+	vwap DOUBLE
+)
+partitioned by tradetime
+
+
+//3 分钟K线
+create database "dfs://k_minute_level"
+partitioned by VALUE(2020.01.01..2021.01.01)
+engine='OLAP'
+
+create table "dfs://k_minute_level"."k_minute"(
+	securityid SYMBOL  
+	tradetime TIMESTAMP
+	open DOUBLE        
+	close DOUBLE       
+	high DOUBLE        
+	low DOUBLE
+	vol INT
+	val DOUBLE
+	vwap DOUBLE
+)
+partitioned by tradetime
+
+
+//4 因子库
+// 快照频因子库
+create database "dfs://level2FactorDB" 
+partitioned by VALUE(2022.01.01..2022.12.31), VALUE(["f1", "f2"]), engine='TSDB'
+create table "dfs://level2FactorDB"."level2FactorTB"(
+  tradetime TIMESTAMP[comment="时间列", compress="delta"], 
+  securityid SYMBOL, 
+  value DOUBLE, 
+  factorname SYMBOL
+)
+partitioned by tradetime, factorname,
+sortColumns=[`securityid, `tradetime], 
+keepDuplicates=ALL, 
+sortKeyMappingFunction=[hashBucket{, 500}]
+
+
+//逐笔频因子库
+create database "dfs://tickFactorDB" partitioned by VALUE(2022.01.01..2022.12.31), VALUE(["f1", "f2"]), HASH([SYMBOL,10])
+engine='TSDB'
+
+create table "dfs://tickFactorDB"."tickFactorTB"(
+    tradetime TIMESTAMP[comment="时间列", compress="delta"], 
+    securityid SYMBOL, 
+    value DOUBLE, 
+    factorname SYMBOL
+)
+partitioned by tradetime, factorname,securityid,
+sortColumns=[`securityid, `tradetime], 
+keepDuplicates=ALL
+
+create database "dfs://minuteFactorDB" 
+partitioned by VALUE(2012.01.01..2021.12.31), VALUE(`f1`f2), 
+engine='TSDB'
+
+//分钟频因子库
+create table "dfs://minuteFactorDB"."minuteFactorTB"(
+    tradetime TIMESTAMP[comment="时间列", compress="delta"], 
+    securityid SYMBOL, 
+    value DOUBLE, 
+    factorname SYMBOL
+)
+partitioned by tradetime, factorname,
+sortColumns=[`securityid, `tradetime], 
+keepDuplicates=ALL, 
+sortKeyMappingFunction=[hashBucket{, 500}]

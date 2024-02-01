@@ -1,0 +1,128 @@
+//1. good case
+create database "dfs://sh_entrust" 
+partitioned by VALUE(2022.01.01..2022.01.03), HASH([SYMBOL, 25]), engine='TSDB'
+
+create table "dfs://sh_entrust"."entrust"(
+	SecurityID SYMBOL,
+	TransactTime TIMESTAMP,
+	valOrderNoue INT,
+	Price DOUBLE,
+	Balance INT,
+	OrderBSFlag SYMBOL,
+	OrdType SYMBOL,
+	OrderIndex INT,
+	ChannelNo INT,
+	BizIndex INT)
+partitioned by TransactTime,SecurityID,
+sortColumns = [`SecurityID,`TransactTime]
+
+//2. bad case too big
+drop database if exists "dfs://sh_entrust_big"
+create database "dfs://sh_entrust_big" 
+partitioned by VALUE(2022.01.01..2022.01.03), engine='TSDB'
+
+create table "dfs://sh_entrust_big"."entrust"(
+	SecurityID SYMBOL,
+	TransactTime TIMESTAMP,
+	valOrderNoue INT,
+	Price DOUBLE,
+	Balance INT,
+	OrderBSFlag SYMBOL,
+	OrdType SYMBOL,
+	OrderIndex INT,
+	ChannelNo INT,
+	BizIndex INT)
+partitioned by TransactTime,
+sortColumns = [`SecurityID,`TransactTime]
+
+
+//3. bad case too small
+drop database if exists "dfs://sh_entrust_small"
+create database "dfs://sh_entrust_small" 
+partitioned by VALUE(["010107", "010303"]), engine='TSDB'
+
+create table "dfs://sh_entrust_small"."entrust"(
+	SecurityID SYMBOL,
+	TransactTime TIMESTAMP,
+	valOrderNoue INT,
+	Price DOUBLE,
+	Balance INT,
+	OrderBSFlag SYMBOL,
+	OrdType SYMBOL,
+	OrderIndex INT,
+	ChannelNo INT,
+	BizIndex INT)
+partitioned by SecurityID,
+sortColumns = [`SecurityID,`TransactTime]
+
+
+//4 query test
+entrust = loadTable("dfs://sh_entrust", "entrust")
+entrust_big = loadTable("dfs://sh_entrust_big", "entrust")
+entrust_small = loadTable("dfs://sh_entrust_small", "entrust")
+
+
+// W1: LOAD DATA PER DAY
+// load textfile about 4.4G into DFS table
+setMemLimitOfQueryResult(8)
+def transType(mutable memTable)
+{
+	return memTable.replaceColumn!(`col0,lpad(string(memTable.col0),6,`0)).replaceColumn!(`col1,datetimeParse(string(memTable.col1),"yyyyMMddHHmmssSSS")).replaceColumn!(`col5,string(memTable.col5)).replaceColumn!(`col6,string(memTable.col6))
+}
+
+//change the filePath according to your environment
+//truncate("dfs://sh_entrust", "entrust")
+//echo 3 > /proc/sys/vm/drop_caches
+
+filePath = "/hdd/data/demo/101/loadDemo/Entrust.csv"
+db = database("dfs://sh_entrust")
+loadTextEx(dbHandle = db, tableName = `entrust, partitionColumns = `col1`col0
+, filename = filePath, transform = transType, skipRows = 1) //38s
+
+db = database("dfs://sh_entrust_big")
+loadTextEx(dbHandle = db, tableName = `entrust, partitionColumns = `col1
+, filename = filePath, transform = transType, skipRows = 1) //49.9s
+
+db = database("dfs://sh_entrust_small")
+loadTextEx(dbHandle = db, tableName = `entrust, partitionColumns = `col0
+, filename = filePath, transform = transType, skipRows = 1) //107s
+
+
+// Q1: TIME SERIES ANALYSIS
+timer select securityID, mavg(Price, 10) 
+    from entrust
+    where securityID = "010107"
+    and OrderBSFlag = "B" //22ms
+
+timer select securityID, mavg(Price, 10) 
+from entrust_big
+where securityID = "010107"
+and OrderBSFlag = "B" //38ms
+
+timer select securityID, mavg(Price, 10) 
+from entrust_small
+where securityID = "010107"
+and OrderBSFlag = "B" //15ms
+
+
+// Q2: AGGREATION
+timer select min(price), max(price), var(price)
+from entrust
+group by securityID, OrderBSFlag //12.1
+
+timer select min(price), max(price), var(price)
+from entrust_big
+group by securityID, OrderBSFlag //6.6
+
+timer select min(price), max(price), var(price)
+from entrust_small
+group by securityID, OrderBSFlag //37.2 with hundreds of queueTasks
+
+/**
+input your test result here
+| partition Design | Q1 | Q2 | W1 |
+| --- | --- | --- | --- |
+|  good case       |    |    | 38|
+|  too big         |    |    | 49|
+|  too small       |    |    | 107 |
+*/

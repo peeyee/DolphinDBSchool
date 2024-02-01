@@ -1,0 +1,72 @@
+def flow(buy_vol, sell_vol, askPrice1, bidPrice1){
+        buy_vol_ma = round(mavg(buy_vol, 5*60), 5)
+        sell_vol_ma = round(mavg(sell_vol, 5*60), 5)
+        buy_prop = iif(abs(buy_vol_ma+sell_vol_ma) < 0, 0.5 , buy_vol_ma/ (buy_vol_ma+sell_vol_ma))
+        spd = askPrice1 - bidPrice1
+        spd = iif(spd < 0, 0, spd)
+        spd_ma = round(mavg(spd, 5*60), 5)
+        return iif(spd_ma == 0, 0, buy_prop / spd_ma)
+}
+
+res_flow = select datetime
+    ,SecurityID
+    ,flow(BidOrderQty[1],OfferOrderQty[1], OfferPrice[1], BidPrice[1]) as val
+    ,`flow as factorname
+from loadTable("dfs://SH_TSDB_snapshot_ArrayVector1","snapshot")
+where date(datetime) >= 2021.01.01
+    and date(datetime) <= 2021.01.10 
+context by SecurityID
+
+//Create
+level2Factor=loadTable("dfs://level2FactorDB", "level2FactorTB")
+level2Factor.tableInsert(res_flow)
+
+
+//Read
+select * 
+from level2Factor 
+where tradetime>=2021.01.04T10:00:00.000 
+and securityid=`600000 
+and factorname=`flow
+limit 100
+
+select value 
+from level2Factor 
+where factorname=`flow
+and tradetime >= 2021.01.04T10:00:00.000 
+and tradetime <= 2021.01.04T10:05:00.000
+pivot by tradetime,securityid 
+
+
+//Update
+
+
+
+
+
+//Delete
+delete from level2Factor
+where factorname=`flow
+and tradetime >= 2021.01.04T10:05:00.000
+
+
+database("dfs://level2FactorDB").schema().partitionSchema
+dropPartition(database("dfs://level2FactorDB"),[2021.01.05, `flow], `level2FactorTB)
+
+
+/*
+* 创建用户u1,授予u1只能读取因子factor1的权限
+* 请注意：新授予的权限，用户需要重新登录才能生效
+*/
+createUser("u1", "u1@1234")
+def getFactor1Table(){
+    t=select * 
+        from loadTable("dfs://level2FactorDB", "level2FactorTB")
+        where factor_name="flow"
+    return t
+}
+addFunctionView(getFactor1Table)
+grant("u1", VIEW_EXEC, "getFactor1Table")
+
+
+

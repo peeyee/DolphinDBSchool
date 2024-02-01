@@ -1,0 +1,43 @@
+/*
+for more detail 
+see: https://github.com/dolphindb/Tutorials_CN/blob/master/LoadDataForPoc.md
+
+*/
+
+if (existsDatabase("dfs://sh_entrust"))
+{
+	dropDatabase("dfs://sh_entrust")
+}
+
+create database "dfs://sh_entrust" 
+partitioned by VALUE(2022.01.01..2022.01.03), HASH([SYMBOL, 25]), engine='TSDB'
+
+
+create table "dfs://sh_entrust"."entrust"(
+	SecurityID SYMBOL,
+	TransactTime TIMESTAMP,
+	valOrderNoue INT,
+	Price DOUBLE,
+	Balance INT,
+	OrderBSFlag STRING,
+	OrdType STRING,
+	OrderIndex INT,
+	ChannelNo INT,
+	BizIndex INT)
+partitioned by TransactTime,SecurityID,
+sortColumns = [`SecurityID,`TransactTime]
+
+
+
+//data cleaning and convertion
+def transType(mutable memTable)
+{
+	return memTable.replaceColumn!(`col0,lpad(string(memTable.col0),6,`0)).replaceColumn!(`col1,datetimeParse(string(memTable.col1),"yyyyMMddHHmmssSSS")).replaceColumn!(`col5,string(memTable.col5)).replaceColumn!(`col6,string(memTable.col6))
+}
+
+//change the filePath according to your environment
+//truncate("dfs://sh_entrust", "entrust")
+filePath = "/hdd/data/demo/101/loadDemo/Entrust.csv"
+db = database("dfs://sh_entrust")
+loadTextEx(dbHandle = db, tableName = `entrust, partitionColumns = `col1`col0
+, filename = filePath, transform = transType, skipRows = 1)
