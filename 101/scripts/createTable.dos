@@ -27,10 +27,33 @@ partitioned by TradeDate, SecurityID,
 sortColumns=[`SecurityID,`TradeTime],
 keepDuplicates=ALL
 
-create database "dfs://split_SH_TB"
-partitioned by VALUE(2020.01.01..2021.01.01), HASH([SYMBOL, 25])
+//沪深合并
+create database "dfs://merge_TB"
+partitioned by VALUE(2020.01.01..2021.01.01), HASH([SYMBOL, 50])
 engine='TSDB'
 
+create table "dfs://merge_TB"."merge_entrustTB"(
+    ChannelNo INT
+    ApplSeqNum LONG
+    MDStreamID SYMBOL
+    SecurityID SYMBOL
+    SecurityIDSource SYMBOL
+    Price DOUBLE
+    OrderQty LONG
+    Side SYMBOL
+    TradeDate DATE[comment="交易日期", compress="delta"]   
+    TradeTime TIME[comment="交易时间", compress="delta"]
+    OrderType SYMBOL
+    LocalTime TIME
+    SeqNo LONG
+    OrderNO LONG
+    DataStatus INT
+    BizIndex LONG
+    Market SYMBOL
+)
+partitioned by TradeDate, SecurityID,
+sortColumns=[`Market,`SecurityID,`TradeTime],
+keepDuplicates=ALL
 
 
 //2 日K线
@@ -74,7 +97,9 @@ partitioned by tradetime
 //4 因子库
 // 快照频因子库
 create database "dfs://level2FactorDB" 
-partitioned by VALUE(2022.01.01..2022.12.31), VALUE(["f1", "f2"]), engine='TSDB'
+partitioned by VALUE(2022.01.01..2022.12.31), VALUE(["f1", "f2"])
+engine='TSDB'
+
 create table "dfs://level2FactorDB"."level2FactorTB"(
   tradetime TIMESTAMP[comment="时间列", compress="delta"], 
   securityid SYMBOL, 
@@ -88,7 +113,8 @@ sortKeyMappingFunction=[hashBucket{, 500}]
 
 
 //逐笔频因子库
-create database "dfs://tickFactorDB" partitioned by VALUE(2022.01.01..2022.12.31), VALUE(["f1", "f2"]), HASH([SYMBOL,10])
+create database "dfs://tickFactorDB" 
+partitioned by VALUE(2022.01.01..2022.12.31), VALUE(["f1", "f2"]), HASH([SYMBOL,10])
 engine='TSDB'
 
 create table "dfs://tickFactorDB"."tickFactorTB"(
@@ -100,12 +126,14 @@ create table "dfs://tickFactorDB"."tickFactorTB"(
 partitioned by tradetime, factorname,securityid,
 sortColumns=[`securityid, `tradetime], 
 keepDuplicates=ALL
+sortKeyMappingFunction=[hashBucket{, 500}]
 
+//分钟频因子库
 create database "dfs://minuteFactorDB" 
 partitioned by VALUE(2012.01.01..2021.12.31), VALUE(`f1`f2), 
 engine='TSDB'
 
-//分钟频因子库
+
 create table "dfs://minuteFactorDB"."minuteFactorTB"(
     tradetime TIMESTAMP[comment="时间列", compress="delta"], 
     securityid SYMBOL, 

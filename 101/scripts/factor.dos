@@ -26,9 +26,11 @@ level2Factor.tableInsert(res_flow)
 select * 
 from level2Factor 
 where tradetime>=2021.01.04T10:00:00.000 
+and tradetime <= 2021.01.04T10:05:00.000
 and securityid=`600000 
 and factorname=`flow
 limit 100
+
 
 select value 
 from level2Factor 
@@ -39,15 +41,24 @@ pivot by tradetime,securityid
 
 
 //Update
+//method1 upsert
+newData=select datetime
+    ,SecurityID
+    ,flow(BidOrderQty[1],OfferOrderQty[1], OfferPrice[1], BidPrice[1]) as val
+    ,`flow as factorname
+    from loadTable("dfs://SH_TSDB_snapshot_ArrayVector1","snapshot")
+    where date(datetime) = 2021.01.04
+    context by SecurityID
+upsert!(level2Factor, newData, keyColNames=`tradetime`securityid`factorname)
 
-
+//method2 dropPartition + tableInsert
 
 
 
 //Delete
-delete from level2Factor
+delete from level2Factor 
 where factorname=`flow
-and tradetime >= 2021.01.04T10:05:00.000
+and date(tradetime) = 2021.01.04
 
 
 database("dfs://level2FactorDB").schema().partitionSchema
