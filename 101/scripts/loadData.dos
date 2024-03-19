@@ -38,6 +38,17 @@ def transType(mutable memTable)
 //change the filePath according to your environment
 //truncate("dfs://sh_entrust", "entrust")
 filePath = "/hdd/data/demo/101/loadDemo/Entrust.csv"
-db = database("dfs://sh_entrust")
-loadTextEx(dbHandle = db, tableName = `entrust, partitionColumns = `col1`col0
-, filename = filePath, transform = transType, skipRows = 1)
+dbName = "dfs://sh_entrust"
+tabName = "entrust"
+
+def loadOneFile(dbName, tabName, filePath){
+	loadTextEx(dbHandle = database(dbName), tableName = tabName, partitionColumns = `col1`col0
+	, filename = filePath, transform = transType, skipRows = 1)
+}
+
+submitJob("loadEntrust", "loadEntrust", loadOneFile, dbName, tabName, filePath)
+
+getRecentJobs(10)
+
+select * from loadTable("dfs://sh_entrust","entrust") limit 100
+select count(*) from loadTable("dfs://sh_entrust","entrust") 

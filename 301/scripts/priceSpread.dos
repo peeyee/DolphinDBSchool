@@ -1,0 +1,33 @@
+//1. input stream table 
+share(table=streamTable(1:0, 
+    `securityID`dateTime`bidPrice0`bidOrderQty0`offerPrice0`offerOrderQty0,
+     [SYMBOL,TIMESTAMP,DOUBLE,LONG,DOUBLE,LONG]),
+     sharedName=`tick)
+
+//2. output stream table
+share(table=streamTable(10000:0, 
+    ["securityID", "dateTime", "factor"], 
+    [SYMBOL, TIMESTAMP, DOUBLE]), 
+    sharedName=`resultTable)
+go
+
+// handler
+def factorCalFunc(msg){
+	tmp = select securityID, dateTime
+        , (offerPrice0-bidPrice0)*2\(offerPrice0+bidPrice0) as factor 
+        from msg
+	objByName("resultTable").append!(tmp)	
+}
+
+// subscrible message 
+subscribeTable(tableName="tick", actionName="factorCal", offset=-1
+    , handler=factorCalFunc, msgAsTable=true, batchSize=1, throttle=0.001)
+
+
+insert into tick values(`000001, 2023.01.01T09:30:00.000, 19.98, 100, 19.99, 120)
+insert into tick values(`000001, 2023.01.01T09:30:03.000, 19.96, 130, 19.99, 120)
+insert into tick values(`000001, 2023.01.01T09:30:06.000, 19.90, 120, 20.00, 130)
+
+getStreamingStat().subWorkers
+
+select * from resultTable

@@ -1,0 +1,68 @@
+/**
+data prepare: https://gitee.com/dolphindb/Tutorials_CN/blob/master/LoadDataForPoc.md
+*/
+
+/* 
+    create database "dfs://sh_entrust" 
+    partitioned by VALUE(2022.01.01..2022.01.03), HASH([SYMBOL, 25]), 
+    engine='TSDB'
+*/
+
+entrust = loadTable("dfs://sh_entrust", "entrust")
+
+hashBuckets = schema(database("dfs://sh_entrust")).partitionSchema[1]
+
+select
+    count(*)  as rows
+from entrust 
+group by date(TransactTime) as VALUE, hashBucket(SecurityID, hashBuckets) as HASH
+
+//Q1 
+select count(*) from entrust where TransactTime+1 > 2021.01.04; 
+//use HINT_EXPLAIN
+select [HINT_EXPLAIN] count(*) from entrust where TransactTime+1 > 2021.01.04;
+
+//Q2
+select count(*) from entrust where 2021.01.04 < date(TransactTime) < 2021.01.06;
+select [HINT_EXPLAIN] count(*) from entrust 
+    where 2021.01.04 < date(TransactTime) < 2021.01.06;
+
+
+//Q3
+select count(*) from entrust where temporalFormat(TransactTime,"yyyy-MM-dd")="2021-01-05";
+select [HINT_EXPLAIN] count(*) from entrust 
+    where temporalFormat(TransactTime,"yyyyMMdd")="2021-01-05";
+
+
+//Q4
+select count(*) from entrust where price < 10; 
+select [HINT_EXPLAIN] count(*) from entrust where price < 10;
+
+
+//Q5
+select count(*) from entrust where price < 10  
+    or date(TransactTime) between 2021.01.04 and 2021.01.06;
+select [HINT_EXPLAIN] count(*) from entrust where price < 10 
+    or date(TransactTime) between 2021.01.04 and 2021.01.06;
+
+
+//Q6
+select count(*) from entrust where date(TransactTime) = 2021.01.05;
+select [HINT_EXPLAIN] count(*) from entrust where date(TransactTime) = 2021.01.05;
+
+
+
+/**
+
+| Query Case | Scan Partitions | Type | 
+| ----------| ------  | ----- |
+| Q1        | 225     | Full scan  |
+| Q2        | 225     | Full scan  |
+| Q3        | 225     | Full scan  |
+| Q4        | 225     | Full scan  |
+| Q5        | 225     | Full scan  |
+| Q6        | 25      | Partitions Cut|
+
+*/
+
+//read more: https://docs.dolphindb.cn/zh/tutorials/DolphinDB_Explain.html

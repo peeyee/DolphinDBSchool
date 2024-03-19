@@ -1,3 +1,7 @@
+//truncate("dfs://level2FactorDB", "level2FactorTB")
+
+
+
 def flow(buy_vol, sell_vol, askPrice1, bidPrice1){
         buy_vol_ma = round(mavg(buy_vol, 5*60), 5)
         sell_vol_ma = round(mavg(sell_vol, 5*60), 5)
@@ -52,6 +56,8 @@ newData=select datetime
 upsert!(level2Factor, newData, keyColNames=`tradetime`securityid`factorname)
 
 //method2 dropPartition + tableInsert
+dropPartition(database("dfs://level2FactorDB"),[2021.01.04, `flow], `level2FactorTB)
+level2Factor.tableInsert(newData)
 
 
 
@@ -62,7 +68,7 @@ and date(tradetime) = 2021.01.04
 
 
 database("dfs://level2FactorDB").schema().partitionSchema
-dropPartition(database("dfs://level2FactorDB"),[2021.01.05, `flow], `level2FactorTB)
+dropPartition(database("dfs://level2FactorDB"),[2021.01.04, `flow], `level2FactorTB)
 
 
 /*
