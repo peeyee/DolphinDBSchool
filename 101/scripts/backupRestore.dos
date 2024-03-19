@@ -1,0 +1,54 @@
+//1 backup
+//1.1 backup a database
+dbPath="dfs://level2"
+backupDir="/hdd/data/demo/101/backup"
+submitJob("backupDB","backup level2",backupDB,backupDir,dbPath)
+select * from getBackupStatus() order by startTime desc
+getBackupList(backupDir,dbPath,`quotes)
+getBackupList(backupDir,dbPath,`trade)
+checkBackup(backupDir,dbPath)
+
+//1.2 backup for one day
+//by sql
+backup(backupDir="/hdd/data/demo/101/backup/sql"
+    ,sqlObj=<select * from loadTable('dfs://level2','trade') where date=2020.06.05>,parallel=true)
+
+//by file
+partitions=[2020.06.05]
+backup(backupDir="/hdd/data/demo/101/backup/20200605/"
+    ,dbPath="dfs://level2",force=true,tableName=`trade,partition=partitions);
+
+select * from getBackupStatus() order by startTime desc
+
+
+//1.3 scheduled backup 
+backupDir=="/hdd/data/demo/101/autoBackup/"
+//by sql
+scheduleJob(`backupJob, "backupDB", backup{backupDir+(today()-1).format("yyyyMMdd"),
+    sqlObj=<select * from loadTable("dfs://level2","quotes") where date=today()-1>
+    , force=false,parallel=true}, 00:10m, today(), 2030.12.31, 'D');
+
+//by file
+scheduleJob(`backupJob, "backupDB", backup{backupDir+(today()-1).format("yyyyMMdd")
+    , dbPath="dfs://level2", force=true, parallel=true, snapshot=true, tableName="quotes"
+    , partition=[today()-1]}, 00:10m, today(), 2030.12.31, 'D'); 
+
+getBackupList(backupDir +(today()-1).format("yyyyMMdd"),"dfs://level2",`quotes)
+
+getScheduledJobs()
+
+//2 restore
+//2.1 restoreDB
+dbPath="dfs://level2"
+backupDir="/hdd/data/demo/101/backup"
+dropDB(dbPath) //drop database
+existsDatabase("dfs://level2")
+submitJob("restoreDB","restore testdb",restoreDB,backupDir,dbPath)
+
+select * from getBackupStatus() order by startTime desc
+select count(*) from loadTable("dfs://level2","quotes") //6,864,627
+select count(*) from loadTable("dfs://level2","trade") //43,873,698
+//2.2 restore a partition
+delete from  loadTable("dfs://level2","quotes") where date=2020.06.05
+select count(*) from loadTable("dfs://level2","quotes") //6,864,627->6,591,834
+restore(backupDir,dbPath,"quotes","%20200605%",true)

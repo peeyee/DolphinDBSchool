@@ -1,0 +1,22 @@
+try{
+    deleteUser("u1")
+    dropFunctionView("getFactor1Table")
+}catch(ex){print ex}
+
+createUser("u1", "u1@1234")
+def getFactor1Table(){
+    t=select * from loadTable("dfs://level2FactorDB","level2FactorTB") 
+      where factorName="flow"
+    return t
+}
+
+addFunctionView(getFactor1Table)
+grant("u1", VIEW_EXEC, "getFactor1Table")
+
+login("u1", "u1@1234")
+undef("getFactor1Table", DEF)
+getUserAccess()
+
+select * from getFactor1Table() limit 100
+
+

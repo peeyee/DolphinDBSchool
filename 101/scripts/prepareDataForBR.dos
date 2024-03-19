@@ -1,0 +1,97 @@
+def createDB(dbName,eng='OLAP'){
+    if(existsDatabase(dbName)) 
+        dropDB(dbName)
+     dbDate = database("", VALUE, 2020.06.01..2020.06.02)
+     dbSymbol=database("", HASH, [SYMBOL, 5])
+     db = database(dbName, COMPO, [dbDate, dbSymbol],engine=eng)
+  }
+  
+  def createTableByCsv(dbName, tableName, dummyTable, partitionCols, sortCols=NULL){
+      db = database(dbName)
+      if(!partitionCols.hasNull()){
+          if(!sortCols.hasNull()){
+              db.createPartitionedTable(dummyTable, tableName, partitionCols, sortColumns=sortCols)
+          }else{
+              db.createPartitionedTable(dummyTable, tableName, partitionCols)
+          }
+      }
+  }
+  
+  //login(`admin,`123456)
+  createDB("dfs://level2")
+  createDB("dfs://level2tsdb",'TSDB')
+  //tar -zxvf BRData.tar.gz
+  //change directory according to your environment 
+  dataDir="/hdd/data/demo/101/"
+  //trade
+  tradeSchema=extractTextSchema(dataDir + "5trade.csv")
+  update tradeSchema set type = "TIME" where name = "UpdateTime"
+  update tradeSchema set type = "SYMBOL" where name = "symbol"
+  trade = table(1:0,tradeSchema.name, tradeSchema.type)
+  createTableByCsv("dfs://level2", "trade", trade, `date`symbol)
+  createTableByCsv("dfs://level2tsdb", "trade", trade, `date`symbol, `symbol`time)
+  
+  //quotes 
+  quotesSchema=extractTextSchema(dataDir + "5quotes.csv")
+  update quotesSchema set type = "TIME" where name = "UpdateTime"
+  update quotesSchema set type = "SYMBOL" where name = "symbol"
+  quotes = table(1:0,quotesSchema.name, quotesSchema.type)
+  
+  createTableByCsv("dfs://level2", "quotes", quotes, `date`symbol)
+  createTableByCsv("dfs://level2tsdb", "quotes", quotes, `date`symbol, `symbol`time)
+  
+  
+  def String2Symbol(mutable t){
+      return t.replaceColumn!(`symbol,symbol(t.symbol))
+  }
+  
+  def transformTrade(mutable t){
+      return t.replaceColumn!(`symbol,symbol(string(t.symbol))).replaceColumn!(`UpdateTime, temporalParse(lpad(string(t.UpdateTime),9,`0), "HHmmssSSS"))
+  }
+  
+  
+  def importQuotesTxtFiles(dbName,tableName,dataDir){
+      db = database(dbName)
+      dataFiles = exec filename from files(dataDir,"%5quotes.csv") where isDir=false
+      for(f in dataFiles){
+          if(database(dbName).schema().engineType==`TSDB)
+                  loadTextEx(dbHandle=db, tableName=tableName,partitionColumns= `date`symbol, filename=dataDir + f,sortColumns=`symbol`time
+                  ,transform=String2Symbol)
+              else
+                  loadTextEx(dbHandle=db, tableName=tableName,partitionColumns= `date`symbol, filename=dataDir + f,transform=String2Symbol)
+  
+      }
+  }
+  
+  def importTradeTxtFiles(dbName,tableName,dataDir){
+      db = database(dbName)
+      dataFiles = exec filename from files(dataDir,"%5trade.csv") where isDir=false
+      for(f in dataFiles){
+          if(database(dbName).schema().engineType==`TSDB)
+                  loadTextEx(dbHandle=db, tableName=tableName,partitionColumns= `date`symbol, filename=dataDir + f,sortColumns=`symbol`time
+                  ,transform=transformTrade)
+              else
+                  loadTextEx(dbHandle=db, tableName=tableName,partitionColumns= `date`symbol, filename=dataDir + f, transform=transformTrade)
+      }
+  }
+  
+  def writeData(mutable t,dbName,tableName, days){
+      pt = loadTable(dbName,tableName)
+      for(day in days){
+          update t set date = day
+          pt.append!(t)		
+      }
+  }
+  
+  def main(dbName,tableName,days){
+      rds = sqlDS(<select * from loadTable(dbName,tableName) where date=2020.06.01>)
+      mr(ds=rds, mapFunc=writeData{,dbName,tableName,days}, parallel=true)
+  }
+  
+  importQuotesTxtFiles("dfs://level2", "quotes" ,dataDir);
+  importQuotesTxtFiles("dfs://level2tsdb", "quotes" ,dataDir);
+  importTradeTxtFiles("dfs://level2", "trade" ,dataDir);
+  days=2020.06.02..2020.06.05
+  days=days[weekday(days) between 1:5]
+  main("dfs://level2","quotes",days)
+  main("dfs://level2","trade",days)
