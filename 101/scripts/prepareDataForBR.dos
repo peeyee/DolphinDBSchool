@@ -95,3 +95,4 @@ def createDB(dbName,eng='OLAP'){
   days=days[weekday(days) between 1:5]
   main("dfs://level2","quotes",days)
   main("dfs://level2","trade",days)
+

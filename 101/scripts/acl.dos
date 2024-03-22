@@ -16,7 +16,3 @@ grant("u1", VIEW_EXEC, "getFactor1Table")
 login("u1", "u1@1234")
 undef("getFactor1Table", DEF)
 getUserAccess()
-
-select * from getFactor1Table() limit 100
-
-

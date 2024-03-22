@@ -144,3 +144,19 @@ partitioned by tradetime, factorname,
 sortColumns=[`securityid, `tradetime], 
 keepDuplicates=ALL, 
 sortKeyMappingFunction=[hashBucket{, 500}]
+
+//日频因子库
+create database "dfs://dayFactorDB" 
+partitioned by RANGE(date(datetimeAdd(1980.01M,0..80*12,'M'))), VALUE(`f1`f2), 
+engine='TSDB'
+
+create table "dfs://dayFactorDB"."dayFactorTB"(
+    tradetime DATE[comment="时间列", compress="delta"], 
+    securityid SYMBOL, 
+    value DOUBLE, 
+    factorname SYMBOL
+)
+partitioned by tradetime, factorname,
+sortColumns=[`securityid, `tradetime], 
+keepDuplicates=ALL, 
+sortKeyMappingFunction=[hashBucket{, 500}]
