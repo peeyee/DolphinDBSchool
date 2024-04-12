@@ -1,0 +1,43 @@
+/**
+SEE: https://docs.dolphindb.cn/zh/progr/named_func.html#%E6%9B%B4%E5%A4%8D%E6%9D%82%E7%9A%84%E4%BE%8B%E5%AD%90
+*/
+
+def calcovar(a, b){
+    aNull=hasNull a;                                                 // 如果输入向量含有 NULL 值，返回 true；否则返回 false
+    bNull=hasNull b;
+    if(!aNull && !bNull){                                            // 如果 a 和 b 都不含 null 值
+            am=avg a;                                                // 使用 avg 函数计算向量 a 的均值
+            bm=avg b;                                                // 使用 avg 函数计算向量 b 的均值
+            ab=a ** b;                                               // 计算向量 a 和 b 的内积
+            n=count a;                                               // 取得非 null 值数
+            return (ab-n*am*bm) \ (n-1);                             // 返回协方差
+   }
+        else{                                                         // 取得 a, b 中所有不为 null 值的元素位置
+               if(!aNull)                                             // 如果 a 不包含任何 null 值
+                       index=!isNull b;                               // 取得所有 b 中非 null 值的下标
+                   else {
+                           if(!bNull)                                  // 如果 b 不包含任何 null 值
+                               index=!isNull a;                        // 取得所有 a 中非 null 值的下标
+                           else
+                               index=!((isNull a) || (isNull b));      // 取得所有 a 和 b 中同时为非 null 值的下标
+                           }
+                    c=a[index];
+                    d=b[index];
+                    am=avg c;
+        bm=avg d;
+        ab=c ** d;
+        n=count c;
+        return (ab-n*am*bm) \ (n-1);
+      }
+}
+
+def f1(a, b){
+    myCovar = calcovar(a, b)
+    x = std(a) * std(b) / myCovar
+}
+
+
+a=NULL 1 2 3 4 5 
+b=2 3 4 5 6 NULL 
+
+f1(a, b)

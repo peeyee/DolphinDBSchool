@@ -1,7 +1,3 @@
-listRemotePlugins()
-installPlugin("amdQuote", "2.00.11_amd4.3.0")
-loadPlugin("amdQuote")
-
 def snapshotSchemaTb(){
 	schemaTable = table(
 		array(SYMBOL, 0) as Market,
@@ -87,14 +83,11 @@ def snapshotSchemaTb(){
 	return schemaTable
 }
 
-snapshot = snapshotSchemaTb()
+t = snapshotSchemaTb()
 colName = t.schema().colDefs.name
 colType = t.schema().colDefs.typeInt
 
 enableTableShareAndPersistence(table=streamTable(500000:0, colName, colType)
 , tableName="snapshot", cacheSize=500000, retentionMinutes=10080, preCache=100000)
 
-
-
-
-undef(`snapshot)
+getPersistenceMeta(snapshot)

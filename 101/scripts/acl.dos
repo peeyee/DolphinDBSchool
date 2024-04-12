@@ -1,12 +1,14 @@
+login("admin", "DolphinDB@123")
 try{
     deleteUser("u1")
     dropFunctionView("getFactor1Table")
 }catch(ex){print ex}
 
 createUser("u1", "u1@1234")
-def getFactor1Table(){
+def getFactor1Table(factorStr, n){
     t=select * from loadTable("dfs://level2FactorDB","level2FactorTB") 
-      where factorName="flow"
+      where factorName=factorStr
+      limit n
     return t
 }
 
@@ -16,3 +18,5 @@ grant("u1", VIEW_EXEC, "getFactor1Table")
 login("u1", "u1@1234")
 undef("getFactor1Table", DEF)
 getUserAccess()
+
+select * from loadTable("dfs://k_day_level","k_day") limit 100

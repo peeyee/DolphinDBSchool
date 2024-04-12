@@ -1,0 +1,20 @@
+/*
+ *  replay 单表回放数据库表
+ */
+login(`admin,"123456")
+
+// 创建输出目标表
+colName = `SecurityID`TradeTime`TradePrice`TradeQty`TradeAmount`BuyNum`SellNum`TradeIndex`ChannelNo`TradeBSFlag`BizIndex
+colType = [SYMBOL, TIMESTAMP, DOUBLE, INT, DOUBLE, INT, INT, INT, INT, SYMBOL, INT]
+share(streamTable(35000000:0, colName, colType), `tickStream)
+
+// 创建数据源
+timeRS = cutPoints(09:15:00.000..15:00:00.000, 10)
+tickDS = replayDS(sqlObj=<select * from loadTable("dfs://SH_TSDB_tick", "tick") where date(TradeTime) =2021.12.08>, dateColumn=`TradeTime, timeColumn=`TradeTime, timeRepartitionSchema=timeRS)
+
+// 提交后台回放任务
+submitJob("replay", "replay", replay, tickDS, objByName("tickStream"), `TradeTime, `TradeTime, 200000, true, 3)
+
+// 查询后台任务执行情况
+getRecentJobs()
+select * from tickStream order by TradeTime desc limit 10

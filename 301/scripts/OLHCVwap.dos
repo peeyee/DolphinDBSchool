@@ -1,0 +1,34 @@
+/*
+ *  用时序聚合引擎计算分钟 OLHC 和Vwap
+ */
+login(`admin,"123456")
+getClusterDFSTables()
+// 创建输入表 tickStream， 输出表 OHLCStream
+colName = `SecurityID`TradeTime`TradePrice`TradeQty`TradeAmount`BuyNum`SellNum`TradeIndex`ChannelNo`TradeBSFlag`BizIndex
+colType = [SYMBOL, TIMESTAMP, DOUBLE, INT, DOUBLE, INT, INT, INT, INT, SYMBOL, INT]
+share(streamTable(35000000:0, colName, colType), `tickStream)
+colName = `TradeTime`SecurityID`OpenPrice`HighPrice`LowPrice`ClosePrice`Vwap
+colType = [TIMESTAMP, SYMBOL, DOUBLE, DOUBLE, DOUBLE, DOUBLE, DOUBLE]
+share(streamTable(2000000:0, colName, colType), `OHLCStream)
+
+// 创建时序聚合引擎
+aggrMetrics = <[ first(TradePrice), max(TradePrice), min(TradePrice), last(TradePrice), wavg(TradePrice, TradeQty) ]>	
+createTimeSeriesEngine(name="OHLCVwap", windowSize=60000, step=60000, metrics=aggrMetrics, dummyTable=objByName("tickStream"), outputTable=objByName("OHLCStream"), timeColumn="TradeTime", useSystemTime=false, keyColumn=`SecurityID, useWindowStartTime=false)
+
+// 订阅 tickStream 表
+subscribeTable(tableName="tickStream", actionName="OHLCVwap", offset=-1, handler=getStreamEngine("OHLCVwap"), msgAsTable=true, batchSize=1000, throttle=1, hash=0)		
+
+// 回放历史数据，注入 tickStream 表
+testData = select * from loadTable("dfs://SH_TSDB_tick", "tick") where date(TradeTime)=2021.12.08, time(TradeTime)>=09:30:00.000, time(TradeTime)<=10:00:00.000 order by TradeTime, SecurityID
+submitJob("replay", "replay", replay, testData, objByName("tickStream"), `TradeTime, `TradeTime, 200000, true, 1)
+
+//getStreamEngineStat().TimeSeriesEngine
+
+
+
+
+
+
+
+
+
