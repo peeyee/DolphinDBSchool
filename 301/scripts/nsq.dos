@@ -1,0 +1,161 @@
+//1 online install
+listRemotePlugins()
+installPlugin("nsq")
+// /home/hwf/teachenv/server/plugins/nsq/PluginNsq.txt
+
+loadPlugin("/home/hwf/teachenv/server/plugins/nsq/PluginNsq.txt")
+
+options = dict(["receivedTime", "getAllFieldNames"], [true, true])
+
+do
+{
+    try{
+        nsq::connect("/home/hwf/teachenv/server/plugins/nsq/sdk_config.ini",options)
+        break
+    }
+    catch(err){
+        nsq::close()
+        sleep(5000)
+    }
+} while(true)
+
+//2 create stream table
+ordersSchema = nsq::getSchema("orders")
+ordersStreamTable1 = streamTable(100:0,ordersSchema.name,ordersSchema.type)
+ordersStreamTable2 = streamTable(100:0,ordersSchema.name,ordersSchema.type)
+
+tradeSchema = nsq::getSchema("trade")
+tradeStreamTable1 = streamTable(100:0,tradeSchema.name,tradeSchema.type)
+tradeStreamTable2 = streamTable(100:0,tradeSchema.name,tradeSchema.type)
+
+snapshotSchema = nsq::getSchema("snapshot")
+snapshotStreamTable1 = streamTable(100:0,snapshotSchema.name,snapshotSchema.type)
+snapshotStreamTable2 = streamTable(100:0,snapshotSchema.name,snapshotSchema.type)
+
+//3 enable persistence
+enableTableShareAndPersistence(table=ordersStreamTable1,tableName="orders_sz",cachesize=1000000,retentionMinutes=480,precache=0)
+enableTableShareAndPersistence(table=ordersStreamTable2,tableName="orders_sh",cachesize=1000000,retentionMinutes=480,precache=0)
+enableTableShareAndPersistence(table=tradeStreamTable1,tableName="trade_sz",cachesize=1000000,retentionMinutes=480,preCache=0)
+enableTableShareAndPersistence(table=tradeStreamTable2,tableName="trade_sh",cachesize=1000000,retentionMinutes=480,preCache=0)
+enableTableShareAndPersistence(table=snapshotStreamTable1,tableName="snapshot_sz",cachesize=1000000,retentionMinutes=480,precache=0)
+enableTableShareAndPersistence(table=snapshotStreamTable2,tableName="snapshot_sh",cachesize=1000000,retentionMinutes=480,preCache=0)
+go
+
+//4 subscribe nsq 
+nsq::subscribe("snapshot","sh",snapshot_sh);
+nsq::subscribe("snapshot","sz",snapshot_sz);
+nsq::subscribe("trade","sh",trade_sh);
+nsq::subscribe("trade","sz",trade_sz);
+nsq::subscribe("orders", "sh", orders_sh);
+nsq::subscribe("orders", "sz", orders_sz);
+go
+
+
+//5 write to DFS
+orders_tmp = table(1:0, ordersSchema.name, ordersSchema.type)
+trade_tmp = table(1:0, tradeSchema.name, tradeSchema.type)
+snapshot_tmp = table(1:0, snapshotSchema.name, snapshotSchema.type)
+go
+
+
+dbDate = database("", VALUE, 2022.01.01..2022.12.01)
+dbSymbol = database("", HASH, [SYMBOL, 20])
+db = database("dfs://nsq_orders_sh", COMPO, [dbDate, dbSymbol])
+db.createPartitionedTable(orders_tmp, "nsq_orders_sh", `TradeDate`ExchangeID)
+
+dbDate = database("", VALUE, 2022.01.01..2022.12.01)
+dbSymbol = database("", HASH, [SYMBOL, 40])
+db = database("dfs://nsq_orders_sz", COMPO, [dbDate, dbSymbol])	
+db.createPartitionedTable(orders_tmp, "orders_sz", `TradeDate`ExchangeID)
+
+dbDate = database("", VALUE, 2022.01.01..2022.12.01)
+dbSymbol = database("", HASH, [SYMBOL, 20])
+db = database("dfs://nsq_trade_sh", COMPO, [dbDate, dbSymbol])	
+db.createPartitionedTable(trade_tmp, "nsq_trade_sh", `TradeDate`ExchangeID)
+
+dbDate = database("", VALUE, 2022.01.01..2022.12.01)
+dbSymbol = database("", HASH, [SYMBOL, 40])
+db = database("dfs://nsq_trade_sz", COMPO, [dbDate, dbSymbol])	
+db.createPartitionedTable(trade_tmp, "trade_sz", `TradeDate`ExchangeID)
+
+dbDate = database("", VALUE, 2022.01.01..2022.12.01)
+dbSymbol = database("", HASH, [SYMBOL, 70])
+db = database("dfs://nsq_snapshot_sh", COMPO, [dbDate, dbSymbol])	
+db.createPartitionedTable(snapshot_tmp, "nsq_snapshot_sh", `TradeDate`ExchangeID)
+
+dbDate = database("", VALUE, 2022.01.01..2022.12.01)
+dbSymbol = database("", HASH, [SYMBOL, 60])
+db = database("dfs://nsq_snapshot_sz", COMPO, [dbDate, dbSymbol])
+db.createPartitionedTable(snapshot_tmp, "snapshot_sz", `TradeDate`ExchangeID)
+
+
+def transferMsgToPt(mutable msg, mutable pt) {
+    ptColDefs = pt.schema().colDefs
+    msgColDefs = msg.schema().colDefs
+    
+    colsToAdd = select * from ptColDefs where !(name in msgColDefs.name)
+    addColumn(msg, colsToAdd.name, colsToAdd.typeInt)
+    colsToDrop = exec name from msgColDefs where !(name in ptColDefs.name)
+    dropColumns!(msg, colsToDrop)
+    reorderColumns!(msg, ptColDefs.name)
+}
+
+
+def addTSForTickSh(mutable msg){
+    pt=loadTable("dfs://nsq_orders_sh","nsq_orders_sh")
+    transferMsgToPt(msg, pt)
+    pt.append!(msg)
+}
+
+def addTSForTickSz(mutable msg){
+    pt=loadTable("dfs://nsq_orders_sz","orders_sz")
+    transferMsgToPt(msg, pt)
+    pt.append!(msg)
+}
+
+def addTSForTradeSh(mutable msg){
+    pt=loadTable("dfs://nsq_trade_sh","nsq_trade_sh")
+    transferMsgToPt(msg, pt)
+    pt.append!(msg)
+}
+
+def addTSForTradeSz(mutable msg){
+    pt=loadTable("dfs://nsq_trade_sz","trade_sz")
+    transferMsgToPt(msg, pt)
+    pt.append!(msg)
+}
+
+def addTSForSnapShotSh(mutable msg){
+    pt=loadTable("dfs://nsq_snapshot_sh","nsq_snapshot_sh")
+    transferMsgToPt(msg, pt)
+    pt.append!(msg)
+}
+
+def addTSForSnapShotSz(mutable msg){
+    pt=loadTable("dfs://nsq_snapshot_sz","nsq_snapshot_sz")
+    transferMsgToPt(msg, pt)
+    pt.append!(msg)
+}
+
+subscribeTable(tableName="orders_sh", actionName="nsq" ,offset=-1 ,handler=addTSForTickSh ,msgAsTable=true ,batchsize=1000)
+subscribeTable(tableName="orders_sz", actionName="nsq" ,offset=-1 ,handler=addTSForTickSz ,msgAsTable=true ,batchsize=1000)
+subscribeTable(tableName="trade_sh", actionName="nsq" ,offset=-1 ,handler=addTSForTradeSh ,msgAsTable=true ,batchsize=1000)
+subscribeTable(tableName="trade_sz", actionName="nsq" ,offset=-1 ,handler=addTSForTradeSz ,msgAsTable=true ,batchSize=1000)
+subscribeTable(tableName="snapshot_sh", actionName="nsq" ,offset=-1 ,handler=addTSForSnapShotSh ,msgAstable=true ,batchSize=1000)
+subscribeTable(tableName="snapshot_sz", actionName="nsq" ,offset=-1 ,handler=addTSForSnapShotSz ,msgAstable=true ,batchSize=1000)
+
+//6 others
+status = nsq::getSubscriptionStatus();
+select * from nsq::getSubscriptionStatus();
+
+select * from snapshot_sh limit 100
+
+nsq::unsubscribe(`orders, `sz)
+nsq::unsubscribe(`orders, `sh)
+nsq::unsubscribe(`trade, `sz)
+nsq::unsubscribe(`trade, `sh)
+nsq::unsubscribe(`snapshot, `sz)
+nsq::unsubscribe(`snapshot, `sh)
+
+
+nsq::close();

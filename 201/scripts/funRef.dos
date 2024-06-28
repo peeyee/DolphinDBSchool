@@ -1,0 +1,33 @@
+def mySum(f, x){
+    return f(x)
+}
+
+mySum(sum, 1..10)
+
+def mySum2(x){
+    return sum2(x)
+}
+
+mySum(mySum2, 1..10)
+
+
+t1 = table(`a`b`c`b`c`d as sym, `ii`ii`ii`kk`kk`kk as concept)
+t2 = table(`ii`ii`ii`kk`kk`kk as concept, `a``c`b`c`d as symDz5)
+
+tmp = select distinct sym, symDz5  from t1 left join t2 on t1.concept = t2.concept order by sym
+re = select count(symDz5) from tmp group by sym
+
+print(re)
+
+historyPrice = rand(50..100, 1000)/10.0
+price = rand(50..100, 1000)/10.0
+each(percentileRank{historyPrice}, price)
+
+rst = array(double, 0, 100)
+
+for(p in price){
+    rst.append!(percentileRank(historyPrice, p))
+}
+
+t = rst.append!(0.0)
+t.size()

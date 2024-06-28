@@ -1,0 +1,7 @@
+def alpha1Panel(close){
+    return rowRank(X = mimax(pow(iif(ratios(close) - 1 < 0,
+     mstd(ratios(close) - 1, 20), close), 2.0), 5), percent =true) - 0.5
+}
+
+close = (rand(10.0, 20000) $ 400:50).rename!(2022.01.01+1..400, "st"+string(1..50))
+alpha1Panel(close)

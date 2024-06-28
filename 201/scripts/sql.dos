@@ -1,0 +1,69 @@
+
+defg maxDrawdown(value){
+	return max(1.0 - value \ value.cummax())
+}
+
+select maxDrawdown(value) as mdd 
+from fundData 
+group by fundID
+
+
+sql((sqlCol(`time`sym), 
+    sqlColAlias(makeUnifiedCall(rowSum, 
+    sqlCol(colN)), `bidSum)),
+    from = quotes)
+.eval()
+
+clearCachedModules()
+
+//context by
+use  DolphinDBModules::simulateData 
+trade = genStockOneDayTrade(tradeDate=2020.01.07, securityNumber=10)
+//update trade set tradeQty = rand(100*(1..5000), trade.size())
+
+
+select * from trade limit 1000
+
+select 
+    TradeTime, 
+    Securityid, 
+    tmavg(TradeTime, TradePrice, 3s) as mavg3s,
+    tmavg(TradeTime, TradePrice, 5s) as mavg5s,
+    tmavg(TradeTime, TradePrice, 10s) as mavg10s
+from trade 
+context by Securityid
+
+select 
+    TradeTime,
+    Securityid,
+    TradePrice,
+from trade
+context by SecurityID
+limit 2
+
+update trade 
+set avgPrice = avg(TradePrice) 
+context by SecurityID
+
+
+select 
+    TradeTime,
+    Securityid,
+    TradePrice,
+    TradeQty
+from trade 
+context by SecurityID 
+csort TradeQty desc 
+limit 2
+
+tradeReal = loadTable("dfs://SH_TSDB_tick", "tick")
+select 
+    TradeTime,
+    Securityid,
+    TradePrice,
+    TradeQty
+from tradeReal 
+where date(TradeTime)=2021.04.02
+context by SecurityID 
+csort TradeQty desc 
+limit 2

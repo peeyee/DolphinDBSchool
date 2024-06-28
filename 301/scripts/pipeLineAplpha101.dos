@@ -1,0 +1,45 @@
+/*
+ *  用时序聚合引擎和响应式状态引擎级联计算分钟 alpha 101 因子
+ */
+/**
+use ops
+clearAllStreamEnv()
+*/
+//1 创建输入表 snapshotStream， 输出表 alpha101Stream
+dbName = "dfs://SH_TSDB_snapshot_ArrayVector1"
+tbName = "snapshot"
+colName = loadTable(dbName, tbName).schema().colDefs.name
+colType = loadTable(dbName, tbName).schema().colDefs.typeString
+share(streamTable(10000000:0, colName, colType), `snapshotStream)
+colName = `SecurityID`DateTime`Alpha101
+colType = `SYMBOL`TIMESTAMP`DOUBLE
+share(streamTable(2000000:0, colName, colType), `alpha101Stream)
+
+//2 创建响应式状态引擎、时间序列聚合引擎，将响应式状态引擎作为时间序列聚合引擎的输出
+@state
+def alpha101(open, high, low,close){
+	return ((close - open) / (high - low + 0.001));
+}
+colName = `DateTime`SecurityID`OpenPx`HighPx`LowPx`ClosePx
+colType = [TIMESTAMP, SYMBOL, DOUBLE, DOUBLE, DOUBLE, DOUBLE]
+OHLCTable = table(1:0, colName, colType)
+reactiveStateMetrics=<[DateTime, alpha101(OpenPx, HighPx, LowPx, ClosePx) as `alpha101 ]>
+createReactiveStateEngine("alpha101", metrics=reactiveStateMetrics, dummyTable=OHLCTable, outputTable=objByName("alpha101Stream"), keyColumn=`SecurityID, keepOrder=true)
+
+aggrMetrics = <[ first(OpenPx), max(HighPx), min(LowPx), last(LastPx) ]>
+createTimeSeriesEngine(name="OHLC", windowSize=60000, step=60000, metrics=aggrMetrics, dummyTable=objByName("snapshotStream"), outputTable=getStreamEngine("alpha101"), timeColumn="DateTime", useSystemTime=false, keyColumn=`SecurityID, useWindowStartTime=false)
+
+//3 订阅 snapshotStream 表
+subscribeTable(tableName="snapshotStream", actionName="OHLC", offset=-1, handler=getStreamEngine("OHLC"), msgAsTable=true, batchSize=1000, throttle=1, hash=0)
+
+//4 回放历史数据，注入 snapshotStream 表
+timeRS = cutPoints(09:30:00.000..15:00:00.000, 10)
+tickDS = replayDS(sqlObj=<select * from loadTable("dfs://SH_TSDB_snapshot_ArrayVector1", "snapshot") where date(DateTime) =2021.12.08 and datetime >= 2021.12.08T09:30:00.000>
+, dateColumn=`DateTime, timeColumn=`DateTime, timeRepartitionSchema=timeRS)
+submitJob("replay", "replaySnapshot", replay, tickDS, objByName("snapshotStream"), `DateTime, `DateTime, 8000, true, 1)
+
+
+//5 查看结果
+getStreamEngineStat().TimeSeriesEngine
+getStreamEngineStat().ReactiveStreamEngine
+select * from alpha101Stream limit 100

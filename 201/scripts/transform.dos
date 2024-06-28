@@ -1,0 +1,51 @@
+//1 vector and table
+
+v = 1..10
+t = table(v as id)
+column(t, 0)
+
+//2 vector and matrix
+v = 1..9
+m = v.reshape(3:3)
+m.flatten()
+
+//3 vector and dict
+
+k = 1 3 2 4 
+v = `a`b`c`d
+d = dict(k, v)
+d = dict(k, v, ordered=true)
+
+d.keys()
+d.values()
+
+
+//4 vector and set
+v = 1 1 2 3 5
+s = set(v)
+
+s.keys()
+
+
+//5 table and dict 
+t = table(1..4 as id, `a`b`c`d as name)
+d = transpose(t)
+
+t = d.transpose()
+
+
+//6. 数组向量和矩阵
+m = 1..9$3:3
+av = fixedLengthArrayVector(m)
+
+m = matrix(av)
+
+
+
+
+
+
+
+
+
+

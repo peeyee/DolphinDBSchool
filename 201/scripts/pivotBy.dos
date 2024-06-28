@@ -1,0 +1,7 @@
+factorTest = loadText("/hdd/data/finance/factorTest.csv")
+
+select top 5 * from factorTest
+
+select value 
+from factorTest
+pivot by date, code, name

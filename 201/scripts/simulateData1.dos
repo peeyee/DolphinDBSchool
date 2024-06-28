@@ -1,0 +1,162 @@
+//use  DolphinDBModules::simulateData 
+def simulateDataLog(funcName, msg) {
+	formattedMsg = stringFormat("[DolphinDBModules::simulateData::%W] : [ERRORINFO]: %W", funcName, msg)
+	throw(formattedMsg)
+}
+
+def validateIntAndScalarParam(funcName, param) {
+	if( form(param) in [0] ){
+		if( type(param) in [4] ){
+			return param
+		}else{
+			simulateDataLog(funcName, "The inputParam must be int type")
+		}
+	}else{
+		simulateDataLog(funcName, "The inputParam  must be scalar")
+		return
+	}
+}
+
+/**
+ * @ Function Name:validateStringAndScalarParam
+ * @ Brief: Verify if the parameter is a string type and if it is a scalar.
+ * @ Param funcName: The name of the Function
+ * @ Param param: The input parameter
+ * @ Return: A error or A parameter
+ * @ Sample Usage: newdbName = validateStringAndScalarParam(funcName, dbName)
+ */
+def validateStringAndScalarParam(funcName, param) {
+	if( form(param) in [0] ){
+		if( type(param) in [18] ){
+			return param
+		}else{
+			simulateDataLog(funcName, "The inputParam must be string type")
+		}
+	}else{
+		simulateDataLog(funcName, "The inputParam  must be scalar")
+		return
+	}
+}
+
+
+
+def validateDateAndScalarParam(funcName, param) {
+	if( form(param) == 0 ){
+		if( type(param) in [6] ){
+			return param
+		}else{
+			simulateDataLog(funcName, "The inputParam must be date type")
+		}
+	}else{
+		simulateDataLog(funcName, "The inputParam must be scalar")
+		return
+	}
+}
+
+
+
+def genStockOneDayTrade(tradeDate, securityNumber){
+	//校验日期参数入参是否为标量，是否为日期类型
+	funcName = "genStockOneDayTrade"
+	validateDateAndScalarParam(funcName, tradeDate)
+	//校验入参股票是否为STRING或者SYMBOL
+    SecurityIDNumber = validateIntAndScalarParam(funcName, securityNumber)
+    if (size(getMarketCalendar("XSHG", tradeDate , tradeDate)) == 0){
+        colName = `ChannelNo`ApplSeqNum`MDStreamID`BidApplSeqNum`OfferApplSeqNum`SecurityID`SecurityIDSource`TradePrice`TradeQty`ExecType`TradeDate`TradeTime`LocalTime`SeqNo`DataStatus`TradeMoney`TradeBSFlag`BizIndex`OrderKind
+	    colType = [INT,LONG,SYMBOL,LONG,LONG,SYMBOL,SYMBOL,DOUBLE,LONG,SYMBOL,DATE,TIME,TIME,LONG,INT,DOUBLE,SYMBOL,LONG,SYMBOL]
+        return table(1:0, colName, colType)
+    }  
+    SecurityID = lpad(string(1..SecurityIDNumber),6,"000000")$SYMBOL
+	//每天每股tick个数，每秒2个
+	tradeMin = table((09:30:00.000+0..14400*500) join (13:00:00.000+0..14400*500) as tradeMin)
+	//第二列，时刻，按范围造
+	tmpTable = cj(table(SecurityID as SecurityID),tradeMin as TradeTime)
+
+	oneDayTickCount = tmpTable.size()
+	TimeList = exec tradeMin from tradeMin
+	TimeSize = size TimeList
+	TimeList = 885 + time(TimeList) 
+	//第三列，成交手数，按p=0.5二项分布的右半边造
+	volumeRand=randBinomial(30,0.5,oneDayTickCount)-15//要正数的右半边
+	volumePool=volumeRand[volumeRand>0]//只取正数的
+	volumes=rand(volumePool,oneDayTickCount)//按手数池子取随机数
+	stockVolumes=long(volumes*100) //手数*100=股数
+	//plot(volumes,tradetime,"testing")
+	sellSideOrderRefCount=oneDayTickCount/4 //卖单号张数
+	buySideOrderRefCount=sellSideOrderRefCount //买单号张数
+	daySize = rows(tradeMin)
+	ChannelNo = array(INT, 0)
+	BidApplSeqNum = array(LONG, 0)
+	OfferApplSeqNum = array(LONG, 0)
+	priceSeries = array(DOUBLE, 0)
+
+	LocalTime = array(TIME, 0)
+	ApplSeqNumList = [0,0,0,0,0,0,0,0,49873,238323,155732,102520,237993,223132]
+	PriceList = 190..210/100.0
+	for(i in SecurityID){
+		for(j in 1..72){
+			No = rand(50, 1) + 2000
+			ChannelNo.append!(take(No, 400))
+		}
+		No = rand(50, 1) + 2000
+		ChannelNo.append!(take(No, 2))
+	}
+	for(i in SecurityID){
+		for(j in 1..72){
+			SeqNum = rand(ApplSeqNumList, 5)
+			BidApplSeqNum.append!(take(SeqNum, 400))
+		}
+		SeqNum = rand(ApplSeqNumList, 1)
+		BidApplSeqNum.append!(take(SeqNum, 2))
+	}
+	for(i in SecurityID){
+		for(j in 1..72){
+			SeqNum = rand(ApplSeqNumList, 5)
+			OfferApplSeqNum.append!(take(SeqNum, 400))
+		}
+		SeqNum = rand(ApplSeqNumList, 1)
+		OfferApplSeqNum.append!(take(SeqNum, 2))
+	}
+	for(i in SecurityID){
+		for(j in 1..360){
+			Price = rand(PriceList, 1)
+			priceSeries.append!(take(Price, 80))
+		}
+		Price = rand(PriceList, 1)
+		priceSeries.append!(take(Price, 2))
+	}
+	for(i in SecurityID){
+		LocalTime.append!(TimeList)
+	}
+	//返回最终数据
+	onedayTradeTable = select 
+			ChannelNo,
+			long(rand(10000, oneDayTickCount).sort!()) as ApplSeqNum,
+			take("011", oneDayTickCount) as MDStreamID,
+			BidApplSeqNum,
+			OfferApplSeqNum,
+			Securityid,
+			take("", oneDayTickCount) as SecurityIDSource,
+			priceSeries as TradePrice,
+			stockVolumes as TradeQty,
+			take("", oneDayTickCount) as ExecType,
+			take(tradeDate, oneDayTickCount) as TradeDate,
+			tradeMin as TradeTime,
+			LocalTime,
+			long(rand(1000, oneDayTickCount) + 10000) as SeqNo,
+			take(0, oneDayTickCount) as DataStatus,	
+			round(rand(200.0, oneDayTickCount) + 1000, 1) as TradeMoney,
+			rand(`S`B,oneDayTickCount) as TradeBSFlag,                     
+			long(take(0, oneDayTickCount)) as BizIndex,
+			take("", oneDayTickCount) as OrderKind
+			from tmpTable
+	return onedayTradeTable
+}
+
+tradeTable = genStockOneDayTrade(tradeDate=2020.01.05, securityNumber=1000)
+
+
+getMarketCalendar("XSHG", 2020.01.05 , 2020.01.10 )
+
+getMarketCalendar("XSHG")
+

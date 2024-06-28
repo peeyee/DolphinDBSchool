@@ -1,0 +1,26 @@
+//1 dynamic variable
+//without go
+t=table(rand(`WMI`PG`TSLA,100) as sym, rand(1..10, 100) as qty, rand(10.25 10.5 10.75, 100) as price);
+share(t,`st); // 试图将表 t 共享为会话中可见的共享表 st
+insert into st values(`AAPL,50,10.25)
+
+//Error: [line #3] Can't recognize table st
+
+//with go
+t=table(rand(`WMI`PG`TSLA,100) as sym, rand(1..10, 100) as qty, rand(10.25 10.5 10.75, 100) as price);
+share(t,`st); // 试图将表 t 共享为会话中可见的共享表 st
+go
+insert into st values(`AAPL,50,10.25)
+
+
+//2 dynamic function
+fs = ["def f2(){return 'haha1';}", "def f2(){return 'haha2';}", "def f2(){return 'haha3';}"];
+runScript(fs[2])
+print(f2())
+
+//Error: [line #3] Cannot recognize the token f2
+fs = ["def f2(){return 'haha1';}", "def f2(){return 'haha2';}", "def f2(){return 'haha3';}"];
+runScript(fs[2])
+go
+print(f2())
+
